@@ -1,0 +1,344 @@
+# -*- coding: utf-8 -*-
+"""
+Created on 2022/10/2 14:09
+
+@author: IMS
+"""
+
+
+import glob
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy.stats import skew, kurtosis
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.metrics import plot_confusion_matrix
+
+
+def data_loading(filepath):
+    files = glob.glob(filepath + '/*.txt')
+    alldata = pd.DataFrame(columns=['signal', 'label'])
+
+    # loop for each file
+    for i, file in enumerate(files):
+        print('Converting data file {}', file)
+
+        with open(file, 'r') as f:
+            lines = f.readlines()
+
+        t = np.array(lines[5:]).astype(np.float32)
+        alldata.loc[i, 'signal'] = t
+
+        label = file.split('\\')[1].split(' ')[0] + ' ' + file.split('\\')[1].split(' ')[1]
+        if label == 'Normal Data':
+            alldata.loc[i, 'label'] = 1
+        elif label == 'Unbalance 1':
+            alldata.loc[i, 'label'] = 2
+        elif label == 'Unbalance 2':
+            alldata.loc[i, 'label'] = 3
+        else:
+            alldata.loc[i, 'label'] = np.nan
+
+    return alldata
+
+
+def data_viz(data, dataid):
+    '''
+    data - dataframe
+    dataid - a 2-dim vector specifies the selected data sample for visualization
+    '''
+
+    # Generating the time and frequency scale of the signal
+    d = data.loc[dataid, :]
+
+    fig = plt.figure(figsize=(10, 8))
+    ax1 = plt.subplot(321)
+    ax1.plot(d.iloc[0].time, d.iloc[0].signal)
+    ax1.set_xlabel('Time (Sec)')
+    ax1.set_ylabel('Healthy Signal')
+
+    ax2 = plt.subplot(323, sharex=ax1)
+    ax2.plot(d.iloc[1].time, d.iloc[1].signal)
+    ax2.set_xlabel('Time (Sec)')
+    ax2.set_ylabel('Unbalance 1 Signal')
+
+    ax3 = plt.subplot(325, sharex=ax1)
+    ax3.plot(d.iloc[2].time, d.iloc[2].signal)
+    ax3.set_xlabel('Time (Sec)')
+    ax3.set_ylabel('Unbalance 2 Signal')
+
+    ax4 = plt.subplot(322)
+    ax4.plot(d.iloc[0].frequency, d.iloc[0].amplitude)
+    ax4.set_xlabel('Frequency (Hz)')
+    ax4.set_ylabel('Healthy Spectrum')
+    ax4.set_xlim([0, 200])
+
+    ax5 = plt.subplot(324, sharex=ax4, sharey=ax4)
+    ax5.plot(d.iloc[1].frequency, d.iloc[1].amplitude)
+    ax5.set_xlabel('Frequency (Hz)')
+    ax5.set_ylabel('Unbalance 1 Spectrum')
+    ax5.set_xlim([0, 200])
+
+    ax6 = plt.subplot(326, sharex=ax4, sharey=ax4)
+    ax6.plot(d.iloc[2].frequency, d.iloc[2].amplitude)
+    ax6.set_xlabel('Frequency (Hz)')
+    ax6.set_ylabel('Unbalance 2 Spectrum')
+    ax6.set_xlim([0, 200])
+
+    fig.show()
+
+
+def FFTAnalysis(x, fs):
+    fnyq = fs / 2  # Nyquist Frequency
+
+    # Generating the time axis - Define the time axis as t
+    dt = 1 / fs
+    n = len(x)
+    t = np.arange(0, n) * dt
+
+    # Generating the frequency axis - Define the frequency axis as f
+    df = fs / n
+    f = np.arange(0, n) * df
+
+    # Applying the FFT Function
+
+     # Please refer to help documment for python function "np.fft.fft" for more
+     # information
+    #      **********************************************************************************************
+    #      **                                                                                          ** 
+    #      **                      Please fill in your code here !                                     **
+    #      **                                                                                          **
+    #      **********************************************************************************************
+        
+
+    amp = amp[f <= fnyq]
+    f = f[f <= fnyq]
+
+    return t, f, amp
+
+
+def feature_extraction(d):
+    def rms(n):
+        return np.sqrt(np.sum(np.square(n)) / len(n))
+
+    x = d.signal
+    f = d.frequency
+    amp = d.amplitude
+
+    # Extracting statistical features: rms, p2p, skewness, kurtosis (feel free to add other features to compare)
+    feavec = []
+    feavec.append(rms(x))
+    feavec.append(np.max(x) - np.min(x))
+    feavec.append(skew(x))
+    feavec.append(kurtosis(x))
+
+    # Extracting frequency features: 1xRotating Frequency, 2xRotating Frequency, 3xRotating Frequency
+
+    # Please extract the vibration features for the 1x, 2x, 3x rotating
+    # frequency (the frequency range can be   1xRot +/- 5Hz)
+    # **********************************************************************************************
+    # **                                                                                          ** 
+    # **                      Please fill in your code here !                                     **
+    # **                                                                                          **
+    # **********************************************************************************************
+    
+
+    feavec = np.array(feavec)
+    feaname = ['rms', 'peak2peak', 'skewness', 'kurtosis', '1xrot', '2xrot', '3xrot']
+
+    return feavec, feaname
+
+
+def feature_viz(data, feaname):
+
+    feamat = np.array([x for x in data.feature])
+    label = data.label.values
+
+    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+    for k, ax in enumerate(axes.flatten()):
+        if k >= feamat.shape[1]:
+            continue
+        idx_1 = np.argwhere(label == 1).flatten()
+        idx_2 = np.argwhere(label == 2).flatten()
+        idx_3 = np.argwhere(label == 3).flatten()
+        ax.plot(idx_1, feamat[idx_1, k], ls='None', marker='o', color='r', label='Normal')
+        ax.plot(idx_2, feamat[idx_2, k], ls='None', marker='x', color='k', label='Unbalance1')
+        ax.plot(idx_3, feamat[idx_3, k], ls='None', marker='v', color='b', label='Unbalance2')
+        ax.set_xlabel('Sample ID')
+        ax.set_ylabel(feaname[k])
+
+    lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+    lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+    fig.legend(lines[:3], labels[:3])
+    fig.show()
+
+    return
+
+def multiclass_fisher(x, y):
+
+    c = np.unique(y)
+
+    num = []
+    den = []
+
+    for k in range(2):
+        idx_k = np.argwhere(y == c[k]).flatten()
+        nk = len(idx_k)
+
+        xk = x[idx_k, :]
+
+        num.append(nk * np.square(np.mean(xk, axis=0) - np.mean(x, axis=0)))
+        den.append(nk * np.var(xk, axis=0))
+
+    num = np.array(num)
+    den = np.array(den)
+    fscore = np.sum(num, axis=0) / np.sum(den, axis=0)
+
+    return fscore
+
+
+def main():
+    # Data Loading
+    train_path = './Training'
+    test_path = './Testing'
+    train_data = data_loading(train_path)
+    test_data = data_loading(test_path)
+
+    # FFT Analysis on Training Data
+    fs = 2560
+
+    t_lst = []
+    f_lst = []
+    amp_lst = []
+
+    for i in range(len(train_data)):
+        x = train_data.signal.iloc[i]
+        t, f, amp = FFTAnalysis(x, fs)
+
+        t_lst.append(t)
+        f_lst.append(f)
+        amp_lst.append(amp)
+
+    train_data['time'] = t_lst
+    train_data['frequency'] = f_lst
+    train_data['amplitude'] = amp_lst
+
+    # Data Visualization on Training Data
+    dataid = [1, 21, 41]  # change the sample id to visualize different data
+    data_viz(train_data, dataid)
+
+    # Feature Extraction on Training Data
+    feavec_lst = []
+    for k in range(len(train_data)):
+        dk = train_data.iloc[k, :]
+        feavec, feaname = feature_extraction(dk)
+        feavec_lst.append(feavec)
+    train_data['feature'] = feavec_lst
+
+    # Feature Visualization - Training Data
+    feature_viz(train_data, feaname)
+
+    # Feature Selection - Training Data
+    feamat = np.array([x for x in train_data.feature])
+    label = train_data.label.values.astype(int)
+
+# % Please use the "multiclass_fisher" subfunction to compute the fisher score
+# % for individual features
+# %     **********************************************************************************************
+# %     **                                                                                          ** 
+# %     **                      Please fill in your code here !                                     **
+# %     **                                                                                          **
+# %     **********************************************************************************************
+    
+
+
+    plt.bar(np.arange(7), fscore)
+    plt.xlabel('Feature')
+    plt.ylabel('Fisher Score')
+    plt.show()
+
+    feaid = np.argwhere(fscore > 1).flatten()
+    feamat = feamat[:, feaid]
+
+    # Feature Normalization - Training Data
+
+    
+#      Please fill in the feature normalization code for the training data
+#      the python function "StandardScaler" is recommended
+# %     **********************************************************************************************
+# %     **                                                                                          ** 
+# %     **                      Please fill in your code here !                                     **
+# %     **                                                                                          **
+# %     **********************************************************************************************
+    
+
+    # Model Training
+
+# % Please fill in the model training code for SVM 
+# % the python function "SVC" is recommended
+# %     **********************************************************************************************
+# %     **                                                                                                                              ** 
+# %     **                      Please fill in your code here !                                                       **
+# %     **                                                                                                                              **
+# %     **********************************************************************************************
+    
+
+    # Feature Extraction - Test Data
+    t_lst = []
+    f_lst = []
+    amp_lst = []
+    feavec_lst = []
+    for k in range(len(test_data)):
+        x = test_data.iloc[k].signal
+        t, f, amp = FFTAnalysis(x, fs)
+
+        t_lst.append(t)
+        f_lst.append(f)
+        amp_lst.append(amp)
+
+    test_data['time'] = t_lst
+    test_data['frequency'] = f_lst
+    test_data['amplitude'] = amp_lst
+
+    for k in range(len(test_data)):
+        feavec, _ = feature_extraction(test_data.iloc[k])
+        feavec_lst.append(feavec)
+
+    test_data['feature'] = feavec_lst
+
+    test_feamat = np.array([x for x in test_data.feature])
+    test_feamat = test_feamat[:, feaid]
+
+    # Feature Normalization - Test Data
+
+# % Please fill in the  feature normalization code for the testing data
+# % the python function "StandardScaler" is recommended
+# %     **********************************************************************************************
+# %     **                                                                                          ** 
+# %     **                      Please fill in your code here !                                     **
+# %     **                                                                                          **
+# %     **********************************************************************************************
+
+
+    # Model Prediction - Test Data
+
+#     % Please fill in the model testing code for SOM
+# %     **********************************************************************************************
+# %     **                                                                                          ** 
+# %     **                      Please fill in your code here !                                     **
+# %     **                                                                                          **
+# %     **********************************************************************************************
+
+    # Plot Confusion Matrix
+
+# % Please fill in the code for confusion matrix
+# % the python function "plot_confusion_matrix" is recommended. 
+# %     **********************************************************************************************
+# %     **                                                                                          ** 
+# %     **                      Please fill in your code here !                                     **
+# %     **                                                                                          **
+# %     ******************************************
+
+if __name__ == '__main__':
+    main()
